@@ -2,41 +2,40 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <cmath>
 
 using namespace std;
 
-// Hereda de pixel
-class Imagen : pixel
-{
+class Imagen {
   private:
     int ancho;
     int alto;
     int bpp;
-    pixel *pix;
+    string dir;
   public:
-    Imagen();
+    Imagen(string dir);
     ~Imagen();
-    void convert_BN(string in, string out);
-    void binarizar(string in, string out);
-    void histograma(string in);
+    Imagen convert_BN(string out);
+    Imagen binarizar(string out);
+    Imagen gamma(string out, float L);
+    void histograma(string out);
 };
 
-Imagen::Imagen()
-{
+Imagen::Imagen(string dir) {
   ancho = 0;
   alto = 0;
   bpp = 0;
+  this->dir = dir;
 };
 
 Imagen::~Imagen(){}
 
-void Imagen::convert_BN(string in, string out)
-{
+Imagen Imagen::convert_BN(string out) {
   string linea;
   string cabecera;
   char coment;
 
-  ifstream imagen(in);
+  ifstream imagen(this->dir);
   ofstream imagen2;
   imagen2.open(out);
 
@@ -80,15 +79,16 @@ void Imagen::convert_BN(string in, string out)
   }
   imagen.close();
   imagen2.close();
+
+  return Imagen(out);
 };
 
-void Imagen::binarizar(string in, string out)
-{
+Imagen Imagen::binarizar(string out) {
   string linea;
   string cabecera;
   char coment;
 
-  ifstream imagen(in);
+  ifstream imagen(this->dir);
   ofstream imagen2;
   imagen2.open(out);
 
@@ -125,36 +125,37 @@ void Imagen::binarizar(string in, string out)
     }
     imagen2 << x << endl;
   }
+
+  imagen.close();
+  imagen2.close();
+
+  return Imagen(out);
 };
 
-void Imagen::histograma(string in)
-{
-  string linea;
-  string cabecera;
+void Imagen::histograma(string out) {
+  string linea, cabecera, systemstr;
   char coment;
-  ifstream imagen(in);
+  ifstream imagen(this->dir);
+
+  ofstream histData;
+  histData.open(out);
 
   getline(imagen, cabecera);
 
   if(cabecera == "P3")
   {
-    cout << "Imagen en formato de: 25 bits" << endl;
     coment = imagen.get();
   }
   if(coment == '#')
   {
-    cout << "Comentario: ";
     getline(imagen, linea);
-    cout << linea << endl;
     getline(imagen, linea);
-    cout << "La imagen mide: " << linea << endl;
   }
   getline(imagen, linea);
-  int m = stoi(linea.c_str());
-  cout << "Profundidad de bits: " << m << endl;
 
   int count[256] = {0};
   int r;
+
   while(getline(imagen, linea)) {
     getline(imagen, linea);
     getline(imagen, linea);
@@ -163,7 +164,70 @@ void Imagen::histograma(string in)
   }
   imagen.close();
 
-  for(int i = 0; i < 256; i++) {
-    printf("%d = %d\n", i, count[i]);
-  };
+  // Generate file to feed gnuplot
+  for (int k = 0; k < 256; k++) {
+    histData << k << " " << count[k] << endl;
+  }
+
+  imagen.close();
+  histData.close();
+
+  system(("gnuplot -p -e \"set boxwidth 1; set style fill solid; set xrange[0:255]; plot '" + out + "' using 1:2 with boxes;\"").c_str());
+  // for(int i = 0; i < 256; i++) {
+  //   printf("%d: %d veces\n", i, count[i]);
+  // };
+
 };
+
+Imagen Imagen::gamma(string out, float L)
+{
+  string linea;
+  string cabecera;
+  char coment;
+
+  ifstream imagen(this->dir);
+  ofstream imagen2;
+  imagen2.open(out);
+
+  // Obtener cabeceras
+  getline(imagen, cabecera);
+
+  if(cabecera == "P3")
+  {
+    imagen2 << "P3" << endl;
+    coment = imagen.get();
+  }
+  if(coment == '#')
+  {
+    getline(imagen, linea);
+    imagen2 << "#" << linea << endl;
+    getline(imagen, linea);
+    imagen2 << linea << endl;
+  }
+  int n = stoi(linea.c_str());
+  getline(imagen, linea);
+  int m = stoi(linea.c_str());
+  imagen2 << 255 << endl;
+
+  int p;
+  int avg;
+  // float ff;
+  // comenzar a hacer la correción
+  while(getline(imagen, linea)) {
+    getline(imagen, linea);
+    getline(imagen, linea);
+    p = stoi(linea.c_str());
+    // ff = (double)p/(double)255;
+    // printf("%f\n", ff);
+    avg = (int)round(255 * pow(((double)p/(double)255), ((double)1/(double)L)));
+    imagen2 << avg << endl;
+    imagen2 << avg << endl;
+    imagen2 << avg << endl;
+  }
+
+  imagen.close();
+  imagen2.close();
+
+  return Imagen(out);
+
+}
