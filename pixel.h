@@ -1,49 +1,65 @@
+#ifndef PIXEL_H
+#define PIXEL_H
 
 using namespace std;
 
-class pixel
+class Pixel
 {
   private:
-    int R;
-    int G;
-    int B;
-
+    int r, g, b;
   public:
-    pixel();
-    ~pixel();
-    int retR();
-    int retG();
-    int retB();
-    void Valores(int a, int b, int c);
+    Pixel();
+    Pixel(int nr, int ng, int nb);
+    ~Pixel();
+    int getR(), getG(), getB();
+    void set(int nr, int ng, int nb);
+    void setR(int nr), setG(int ng), setB(int nb);
 };
 
-pixel::pixel()
+Pixel::Pixel()
 {
-  R = 0;
-  G = 0;
-  B = 0;
+  r = 0;
+  g = 0;
+  b = 0;
 };
 
-pixel::~pixel(){}
-
-int pixel::retR()
+Pixel::Pixel(int nr, int ng, int nb)
 {
-  return R;
+  r = nr;
+  g = ng;
+  b = nb;
 };
 
-int pixel::retG()
-{
-  return G;
+Pixel::~Pixel(){}
+
+int Pixel::getR() {
+  return r;
 };
 
-int pixel::retB()
-{
-  return B;
+int Pixel::getG() {
+  return g;
 };
 
-void pixel::Valores(int a, int b, int c)
-{
-  R = a;
-  G = b;
-  B = c;
+int Pixel::getB() {
+  return b;
 };
+
+void Pixel::set(int nr, int ng, int nb) {
+  r = nr;
+  g = ng;
+  b = nb;
+};
+
+void Pixel::setR(int nr) {
+  r = nr;
+};
+
+void Pixel::setG(int ng) {
+  g = ng;
+};
+
+void Pixel::setB(int nb) {
+  b = nb;
+};
+
+#endif
