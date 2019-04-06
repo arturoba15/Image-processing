@@ -3,34 +3,38 @@
 
 using namespace std;
 
-class Pixel
-{
+class Pixel {
   private:
     int r, g, b;
   public:
     Pixel();
     Pixel(int nr, int ng, int nb);
+    Pixel(int rgb[]);
     ~Pixel();
     int getR(), getG(), getB();
     void set(int nr, int ng, int nb);
     void setR(int nr), setG(int ng), setB(int nb);
 };
 
-Pixel::Pixel()
-{
+Pixel::Pixel() {
   r = 0;
   g = 0;
   b = 0;
 };
 
-Pixel::Pixel(int nr, int ng, int nb)
-{
+Pixel::Pixel(int nr, int ng, int nb) {
   r = nr;
   g = ng;
   b = nb;
 };
 
-Pixel::~Pixel(){}
+Pixel::Pixel(int rgb[3]) {
+  r = rgb[0];
+  g = rgb[1];
+  b = rgb[2];
+};
+
+Pixel::~Pixel(){};
 
 int Pixel::getR() {
   return r;

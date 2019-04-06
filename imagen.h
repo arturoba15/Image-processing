@@ -7,28 +7,34 @@
 #include <string>
 #include <cmath>
 #include "pixel.h"
+#include "unionfind.h"
 
 using namespace std;
 
 class Imagen {
-  private:
-    int ancho;
-    int alto;
-    int bpp;
-    string dir;
-    void cp_cabeceras(ifstream &imagen, ofstream &imagen2);
-    void w_pixel(ofstream &os, Pixel p);
-    bool r_pixel(ifstream &is, Pixel& p);
-  public:
-    Imagen(string dir);
-    ~Imagen();
-    Imagen bn();
-    void histograma();
-    Imagen binarizar();
-    Imagen gamma(float L);
-    Imagen umbral(int umbral);
-    Imagen extension(int umbral1, int umbral2);
-    Imagen umBinInvertido(int um1, int um2);
+private:
+  int ancho;
+  int alto;
+  int bpp;
+  string dir;
+  void cp_cabeceras(ifstream &imagen, ofstream &imagen2);
+  void w_pixel(ofstream &os, Pixel p);
+  bool r_pixel(ifstream &is, Pixel& p);
+  void ignora_cabeceras(ifstream &imagen);
+  int get_index(int fila, int col, int n_cols);
+public:
+  Imagen(string dir);
+  ~Imagen();
+  Imagen bn();
+  void histograma();
+  Imagen binarizar();
+  Imagen gamma(float L);
+  Imagen umbral(int umbral);
+  Imagen suma(Imagen sum);
+  Imagen resta(Imagen res);
+  Imagen umBinInvertido(int um1, int um2);
+  Imagen extension(int umbral1, int umbral2);
+  int etiquetaObjetos();
 };
 
 Imagen::Imagen(string dir) {
@@ -64,6 +70,15 @@ void Imagen::cp_cabeceras(ifstream &imagen, ofstream &imagen2) {
   imagen2 << linea << endl;
 };
 
+// ignora cabeceras
+void Imagen::ignora_cabeceras(ifstream &imagen) {
+  string linea;
+  getline(imagen, linea);
+  getline(imagen, linea);
+  getline(imagen, linea);
+  getline(imagen, linea);
+}
+
 // Escribe un pixel a la imagen
 void Imagen::w_pixel(ofstream &os, Pixel p) {
   os << p.getR() << endl;
@@ -87,6 +102,12 @@ bool Imagen::r_pixel(ifstream &is, Pixel& p) {
   return true;
 }
 
+// Obtiene el index de una matriz a partir de la fila y columna
+int Imagen::get_index(int fila, int col, int n_cols) {
+  return (fila * n_cols) + col;
+}
+
+// Convierte la imagen a blanco y negro
 Imagen Imagen::bn() {
   string out = "bn" + this->dir;
   ifstream imagen(this->dir);
@@ -179,7 +200,7 @@ Imagen Imagen::gamma(float L) {
   imagen2.close();
 
   return Imagen(out);
-}
+};
 
 Imagen Imagen::umbral(int umbral) {
   Pixel p;
@@ -252,6 +273,225 @@ Imagen Imagen::extension(int um1, int um2) {
   imagen2.close();
 
   return Imagen(out);
+};
+
+Imagen Imagen::suma(Imagen sum) {
+  string out = "sum.ppm" + this->dir;
+  ifstream imagen(this->dir);
+  ifstream imagen2(sum.dir);
+  ofstream imagen_out(out);
+
+  cp_cabeceras(imagen, imagen_out);
+  ignora_cabeceras(imagen2);
+
+  Pixel p0, p1, pw;
+  int r, g, b;
+  while(r_pixel(imagen, p0)) {
+    r_pixel(imagen2, p1);
+    r = p0.getR() + p1.getR();
+    g = p0.getG() + p1.getG();
+    b = p0.getB() + p1.getB();
+    if(r > 255)
+      r = 255;
+    if(g > 255)
+      g = 255;
+    if(b > 255)
+      b = 255;
+    pw.set(r, g, b);
+    w_pixel(imagen_out, pw);
+  }
+
+  imagen.close();
+  imagen2.close();
+  imagen_out.close();
+
+  return Imagen(out);
+};
+
+Imagen Imagen::resta(Imagen res) {
+  string out = "resta" + this->dir;
+  ifstream imagen(this->dir);
+  ifstream imagen2(res.dir);
+  ofstream imagen_out(out);
+
+  cp_cabeceras(imagen, imagen_out);
+  ignora_cabeceras(imagen2);
+
+  Pixel p0, p1, pw;
+  int r, g, b;
+  while(r_pixel(imagen, p0)) {
+    r_pixel(imagen2, p1);
+    r = p0.getR() - p1.getR();
+    g = p0.getG() - p1.getG();
+    b = p0.getB() - p1.getB();
+    if(r < 0)
+      r = 0;
+    if(g < 0)
+      g = 0;
+    if(b < 0)
+      b = 0;
+    pw.set(r, g, b);
+    w_pixel(imagen_out, pw);
+  }
+
+  imagen.close();
+  imagen2.close();
+  imagen_out.close();
+
+  return Imagen(out);
+};
+
+int Imagen::etiquetaObjetos() {
+  string linea;
+  string fout = "etiqueta-" + this->dir;
+  ifstream imagen(this->dir);
+  ofstream imagen2(fout);
+
+  int pixeles[2 * this->ancho]; // Se tendrán 2 filas de la imagen en memoria
+  int wrpixel; // Pixel a escribir en el archivo al terminar las comparaciones
+  int tag = 1;
+  int colors[3];
+  Pixel px;
+  UnionFind ufStruct = UnionFind();
+
+  printf("Contando objetos\n");
+
+  cp_cabeceras(imagen, imagen2);
+
+  // Primeras 2 lineas del archivo
+  // En la primera linea de la matriz se guardan 0's
+  // En la segunda linea guardamos la primera fila de la imagen
+  // Dejamos 0 como negro, 1 como blanco
+  for(int j = 0; j < this->ancho; j++) {
+    r_pixel(imagen, px);
+    if(px.getR() == 255)
+      pixeles[get_index(1, j, this->ancho)] = 1;
+    else
+      pixeles[get_index(1, j, this->ancho)] = 0;
+    pixeles[get_index(0, j, this->ancho)] = 0;
+  }
+
+  // Primera pasada
+  // > 1 significa que no es blanco y negro y tampoco es del fondo
+  for(int j = 0; j < this->alto; j++) {
+    for(int i = 0; i < this->ancho; i++) {
+      if(pixeles[get_index(1, i, this->ancho)] == 1) { // Si el actual es blanco, checamos vecinos
+        if(i-1 > 0) { // Solo si no esta hasta la izquierda, checamos los 2
+          if(pixeles[get_index(1, i-1, this->ancho)] > 1 && pixeles[get_index(0, i, this->ancho)] > 1) {
+            if(pixeles[get_index(1, i-1, this->ancho)] < pixeles[get_index(0, i, this->ancho)])
+              pixeles[get_index(1, i, this->ancho)] = pixeles[get_index(1, i-1, this->ancho)];
+            else
+              pixeles[get_index(1, i, this->ancho)] = pixeles[get_index(0, i, this->ancho)];
+            wrpixel = pixeles[get_index(1, i, this->ancho)];
+            // Si sucede esto, guardamos y decimos que los 2 pertenecen a lo mismo
+            ufStruct.merge(pixeles[get_index(1, i-1, this->ancho)], pixeles[get_index(0, i, this->ancho)]);
+          } else if(pixeles[get_index(0, i, this->ancho)] > 1) { // arriba
+            pixeles[get_index(1, i, this->ancho)] = pixeles[get_index(0, i, this->ancho)];
+            wrpixel = pixeles[get_index(1, i, this->ancho)];
+          } else if(pixeles[get_index(1, i-1, this->ancho)] > 1) { // izquierdo
+            pixeles[get_index(1, i, this->ancho)] = pixeles[get_index(1, i-1, this->ancho)];
+            wrpixel = pixeles[get_index(1, i, this->ancho)];
+          } else {
+            // Creamos nueva etiqueta
+            pixeles[get_index(1, i, this->ancho)] = ++tag;
+            wrpixel = tag;
+            ufStruct.addRoot();
+          }
+        } else { // Si está hasta la izquierda, checamos arriba
+          if(pixeles[get_index(0, i, this->ancho)] > 1) { // arriba
+            pixeles[get_index(1, i, this->ancho)] = pixeles[get_index(0, i, this->ancho)];
+            wrpixel = pixeles[get_index(1, i, this->ancho)];
+          } else {
+            // Creamos nueva etiqueta
+            pixeles[get_index(1, i, this->ancho)] = ++tag;
+            wrpixel = tag;
+            ufStruct.addRoot();
+          }
+        }
+      } else { // Si es del fondo, lo dejamos como está
+        wrpixel = 0;
+      }
+      // Escribimos el pixel en el archivo
+      if(wrpixel != 0) {
+        // for(int i = 0; i < 3; i++) {
+          // srand(wrpixel + i);
+          // colors[i] = rand() %  256;
+        // }
+        // w_pixel(imagen2, Pixel(colors));
+        w_pixel(imagen2, Pixel(wrpixel, wrpixel, wrpixel));
+      } else {
+        w_pixel(imagen2, Pixel(0, 0, 0));
+      }
+    }
+
+    // Movemos la fila inferior de la matriz hacia arriba
+    // Leemos la nueva linea en la linea inferior
+    for(int p = 0; p < this->ancho; p++) {
+      pixeles[get_index(0, p, this->ancho)] = pixeles[get_index(1, p, this->ancho)];
+      r_pixel(imagen, px);
+      if(px.getR() == 255)
+        pixeles[get_index(1, p, this->ancho)] = 1;
+      else
+        pixeles[get_index(1, p, this->ancho)] = 0;
+    }
+  }
+
+  imagen.close();
+  imagen2.close();
+
+  // Abrimos la imagen que cerramos
+  imagen.open(fout);
+  imagen2.open("et2-" + fout);
+  cp_cabeceras(imagen, imagen2);
+
+  // Segunda pasada para corregir errores
+  int root;
+  for(int j = 0; j < this->ancho; j++) { // Llenar matriz de nuevo
+    r_pixel(imagen, px);
+    pixeles[get_index(1, j, this->ancho)] = px.getR();
+    pixeles[get_index(0, j, this->ancho)] = 1;
+  }
+
+  for(int j = 0; j < this->alto; j++) {
+    for(int i = 0; i < this->ancho; i++) {
+      if(pixeles[get_index(1, i, this->ancho)] != 0) { // Checar solo los que no son negros
+        // Checar si la etiqueta es raiz
+        root = ufStruct.find(pixeles[get_index(1, i, this->ancho)]);
+        if(root == pixeles[get_index(1, i, this->ancho)]-2) { // Lo dejamos como está
+          wrpixel = pixeles[get_index(1, i, this->ancho)];
+        } else { // Le asignamos su raíz
+          wrpixel = root + 2;
+          pixeles[get_index(1, i, this->ancho)] = wrpixel;
+        }
+      } else {
+        wrpixel = 0;
+      }
+
+      // Escribimos el pixel en el archivo
+      if(wrpixel != 0) {
+        for(int i = 0; i < 3; i++) {
+          srand(wrpixel + i);
+          colors[i] = rand() %  256;
+        }
+        w_pixel(imagen2, Pixel(colors));
+      } else {
+        w_pixel(imagen2, Pixel(0, 0, 0));
+      }
+    }
+
+    // Movemos la fila inferior de la matriz hacia arriba
+    // Leemos la nueva linea en la linea inferior
+    for(int p = 0; p < this->ancho; p++) {
+      pixeles[get_index(0, p, this->ancho)] = pixeles[get_index(1, p, this->ancho)];
+      r_pixel(imagen, px);
+      pixeles[get_index(1, p, this->ancho)] = px.getR();
+    }
+  }
+
+  imagen.close();
+  imagen2.close();
+
+  return ufStruct.length;
 };
 
 #endif

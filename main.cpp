@@ -5,9 +5,7 @@ using namespace std;
 
 int main()
 {
-  Imagen etud = Imagen("etud.ppm");
-  Imagen etud_bn = etud.bn();
-  etud_bn.extension(10, 220);
-
-  return 0;
+  Imagen circulos = Imagen("circulos.ppm");
+  int obj = circulos.etiquetaObjetos();
+  printf("%d objetos\n", obj);
 }

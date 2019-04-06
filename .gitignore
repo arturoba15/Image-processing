@@ -1,3 +1,4 @@
 *.ppm
 *.dat
-main
+main*
+makefile
