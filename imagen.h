@@ -35,6 +35,9 @@ public:
   Imagen umBinInvertido(int um1, int um2);
   Imagen extension(int umbral1, int umbral2);
   int etiquetaObjetos();
+  Imagen mAritmetica();
+  Imagen mGaussiana(double variance);
+  Imagen mGeometrica();
 };
 
 Imagen::Imagen(string dir) {
@@ -441,7 +444,7 @@ int Imagen::etiquetaObjetos() {
 
   // Abrimos la imagen que cerramos
   imagen.open(fout);
-  imagen2.open("et2-" + fout);
+  imagen2.open("2" + fout);
   cp_cabeceras(imagen, imagen2);
 
   // Segunda pasada para corregir errores
@@ -492,6 +495,257 @@ int Imagen::etiquetaObjetos() {
   imagen2.close();
 
   return ufStruct.length;
+};
+
+Imagen Imagen::mAritmetica() {
+  string out = "arit" + this->dir;
+  ifstream imagen(this->dir);
+  ofstream imagen2(out);
+  // Las 2 columnas, serán 0's para también procesar los bordes la imagen
+  const int cols = this->ancho + 2;
+  int imagMat[3][cols];
+  int mean = 0; int inc = 0;
+  Pixel pix;
+
+  cp_cabeceras(imagen, imagen2);
+
+  // Llenar las ultimas 2 filas de la matriz
+  // Los 0's de los bordes serán estáticos
+  imagMat[0][0] = 0; imagMat[0][this->ancho + 1] = 0;
+  imagMat[1][0] = 0; imagMat[1][this->ancho + 1] = 0;
+  imagMat[2][0] = 0; imagMat[2][this->ancho + 1] = 0;
+  for(int j = 1; j < this->ancho + 1; j++)
+    imagMat[1][j] = 0;
+  for(int j = 1; j < this->ancho + 1; j++) {
+    r_pixel(imagen, pix);
+    imagMat[2][j] = pix.getR();
+  }
+
+  for(int m = 0; m < this->alto -1 ; m++) {
+    // Llenar matriz:
+    // Lee 1 linea, recorre las 2 que ya estaban
+    for(int p = 1; p < this->ancho + 1; p++) {
+      imagMat[0][p] = imagMat[1][p];
+      imagMat[1][p] = imagMat[2][p];
+      r_pixel(imagen, pix);
+      imagMat[2][p] = pix.getR();
+    }
+
+    // Procesar cada pixel (columna de la fila[m] actual)
+    for(int n = 0; n < this->ancho; n++) {
+      // Obtener la media
+      // Con inc vamos moviendo la mascara a través de la matriz (a la derecha)
+      for(int maskm = 0; maskm < 3; maskm++)
+        for(int maskn = inc; maskn < inc + 3; maskn++)
+          mean += imagMat[maskm][maskn];
+      mean /= 9;
+      inc++;
+
+      w_pixel(imagen2, Pixel(mean, mean, mean));
+      mean = 0;
+    }
+    inc = 0;
+  }
+
+  // La última fila, la vamos a procesar añadiendo otra linea negra
+  for(int p = 1; p < this->ancho + 1; p++) {
+    imagMat[0][p] = imagMat[1][p];
+    imagMat[1][p] = imagMat[2][p];
+    imagMat[2][p] = 0;
+  }
+  // Sacamos media de la última fila
+  inc = 0;
+  for(int i = 0; i < this->ancho; i++) {
+    for(int maskm = 0; maskm < 3; maskm++)
+      for(int maskn = inc; maskn < inc + 3; maskn++)
+        mean += imagMat[maskm][maskn];
+    mean /= 9;
+    inc++;
+
+    w_pixel(imagen2, Pixel(mean, mean, mean));
+    mean = 0;
+  }
+
+  imagen.close();
+  imagen2.close();
+
+  return Imagen(out);
+};
+
+Imagen Imagen::mGaussiana(double variance) {
+  string out = "mgauss" + this->dir;
+  ifstream imagen(this->dir);
+  ofstream imagen2(out);
+  // Las 2 columnas, serán 0's para también procesar los bordes la imagen
+  const int cols = this->ancho + 2;
+  int imagMat[3][cols];
+  int inc = 0;
+  double mean;
+  Pixel pix;
+
+  cp_cabeceras(imagen, imagen2);
+
+  // Generar matriz de pesos
+  double weights[3][3];
+  double summation;
+  for(int i = 0; i < 3; i++) {
+    for(int j = 0; j < 3; j++) {
+      weights[i][j] = (1/(2*M_PI*variance*variance)) * exp(-1*((i-1)*(i-1)+(j-1)*(j-1))/(2*variance*variance));
+      summation += weights[i][j];
+    }
+  }
+  // Normalizarla
+  for(int i = 0; i < 3; i++) {
+    for(int j = 0; j < 3; j++) {
+      weights[i][j] /= summation;
+      printf("%f ", weights[i][j]);
+    }
+    printf("\n");
+  }
+
+  // Llenar las ultimas 2 filas de la matriz
+  // Los 0's de los bordes serán estáticos
+  imagMat[0][0] = 0; imagMat[0][this->ancho + 1] = 0;
+  imagMat[1][0] = 0; imagMat[1][this->ancho + 1] = 0;
+  imagMat[2][0] = 0; imagMat[2][this->ancho + 1] = 0;
+  for(int j = 1; j < this->ancho + 1; j++)
+    imagMat[1][j] = 0;
+  for(int j = 1; j < this->ancho + 1; j++) {
+    r_pixel(imagen, pix);
+    imagMat[2][j] = pix.getR();
+  }
+
+  for(int m = 0; m < this->alto -1 ; m++) {
+    // Llenar matriz:
+    // Lee 1 linea, recorre las 2 que ya estaban
+    for(int p = 1; p < this->ancho + 1; p++) {
+      imagMat[0][p] = imagMat[1][p];
+      imagMat[1][p] = imagMat[2][p];
+      r_pixel(imagen, pix);
+      imagMat[2][p] = pix.getR();
+    }
+
+    // Procesar cada pixel (columna de la fila[m] actual)
+    for(int n = 0; n < this->ancho; n++) {
+      // Obtener la media
+      // Con inc vamos moviendo la mascara a través de la matriz (a la derecha)
+      int iGauss = 0, jGauss = 0;
+      for(int maskm = 0; maskm < 3; maskm++) {
+        for(int maskn = inc; maskn < inc + 3; maskn++) {
+          mean += imagMat[maskm][maskn] * weights[iGauss][jGauss];
+          jGauss++;
+        }
+        jGauss = 0;
+        iGauss++;
+      }
+      iGauss = 0;
+      // mean /= 9;
+      inc++;
+
+      w_pixel(imagen2, Pixel((int)mean, (int)mean, (int)mean));
+      mean = 0;
+    }
+    inc = 0;
+  }
+
+  // La última fila, la vamos a procesar añadiendo otra linea negra
+  for(int p = 1; p < this->ancho + 1; p++) {
+    imagMat[0][p] = imagMat[1][p];
+    imagMat[1][p] = imagMat[2][p];
+    imagMat[2][p] = 0;
+  }
+  // Sacamos media de la última fila
+  inc = 0;
+  for(int i = 0; i < this->ancho; i++) {
+    for(int maskm = 0; maskm < 3; maskm++)
+      for(int maskn = inc; maskn < inc + 3; maskn++)
+        mean += imagMat[maskm][maskn];
+    mean /= 9;
+    inc++;
+
+    w_pixel(imagen2, Pixel(mean, mean, mean));
+    mean = 0;
+  }
+
+  imagen.close();
+  imagen2.close();
+
+  return Imagen(out);
+};
+
+Imagen Imagen::mGeometrica() {
+  string out = "geom" + this->dir;
+  ifstream imagen(this->dir);
+  ofstream imagen2(out);
+  // Las 2 columnas, serán 0's para también procesar los bordes la imagen
+  const int cols = this->ancho + 2;
+  int imagMat[3][cols];
+  double mean = 1; int inc = 0;
+  Pixel pix;
+
+  cp_cabeceras(imagen, imagen2);
+
+  // Llenar las ultimas 2 filas de la matriz
+  // Los 0's de los bordes serán estáticos
+  imagMat[0][0] = 0; imagMat[0][this->ancho + 1] = 0;
+  imagMat[1][0] = 0; imagMat[1][this->ancho + 1] = 0;
+  imagMat[2][0] = 0; imagMat[2][this->ancho + 1] = 0;
+  for(int j = 1; j < this->ancho + 1; j++)
+    imagMat[1][j] = 0;
+  for(int j = 1; j < this->ancho + 1; j++) {
+    r_pixel(imagen, pix);
+    imagMat[2][j] = pix.getR();
+  }
+
+  for(int m = 0; m < this->alto -1 ; m++) {
+    // Llenar matriz:
+    // Lee 1 linea, recorre las 2 que ya estaban
+    for(int p = 1; p < this->ancho + 1; p++) {
+      imagMat[0][p] = imagMat[1][p];
+      imagMat[1][p] = imagMat[2][p];
+      r_pixel(imagen, pix);
+      imagMat[2][p] = pix.getR();
+    }
+
+    // Procesar cada pixel (columna de la fila[m] actual)
+    for(int n = 0; n < this->ancho; n++) {
+      // Obtener la media
+      // Con inc vamos moviendo la mascara a través de la matriz (a la derecha)
+      for(int maskm = 0; maskm < 3; maskm++)
+        for(int maskn = inc; maskn < inc + 3; maskn++)
+          mean *= imagMat[maskm][maskn];
+      mean = pow(mean, 1.0/9);
+      inc++;
+      mean = round(mean);
+      w_pixel(imagen2, Pixel((int)mean, (int)mean, (int)mean));
+      mean = 1;
+    }
+    inc = 0;
+  }
+
+  // La última fila, la vamos a procesar añadiendo otra linea negra
+  for(int p = 1; p < this->ancho + 1; p++) {
+    imagMat[0][p] = imagMat[1][p];
+    imagMat[1][p] = imagMat[2][p];
+    imagMat[2][p] = 0;
+  }
+  // Sacamos media de la última fila
+  inc = 0;
+  for(int i = 0; i < this->ancho; i++) {
+    for(int maskm = 0; maskm < 3; maskm++)
+      for(int maskn = inc; maskn < inc + 3; maskn++)
+        mean *= imagMat[maskm][maskn];
+    mean = pow(mean, 1/9);
+    inc++;
+    mean = round(mean);
+    w_pixel(imagen2, Pixel((int)mean, (int)mean, (int)mean));
+    mean = 1;
+  }
+
+  imagen.close();
+  imagen2.close();
+
+  return Imagen(out);
 };
 
 #endif
